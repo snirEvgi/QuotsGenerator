@@ -1,6 +1,7 @@
 import { useLanguage } from '../contexts/LanguageContext';
 import { useEffect, useState } from 'react';
 import EditableTable from './EditableTable';
+import { TermsAndConditions } from './TermsAndConditions';
 
 interface CompanyInfo {
   companyName: string;
@@ -96,7 +97,14 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
       </div>
 
       {/* Table Section */}
-      <EditableTable />
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <EditableTable />
+      </div>
+
+      {/* Terms Section */}
+      <div className="mt-12 bg-gray-50">
+        <TermsAndConditions />
+      </div>
 
       {/* Download Button */}
       <div className="flex justify-center mt-8">

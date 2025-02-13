@@ -45,7 +45,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gradient-to-b from-blue-100 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-100 to-blue-50">
         {/* Language Toggle Button */}
         <button
           onClick={handleLanguageToggle}
