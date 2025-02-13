@@ -254,7 +254,11 @@ const SortableRow = ({ row, headers, onUpdate, showPrice, onDeleteColumn, onDele
   );
 };
 
-export default function EditableTable() {
+interface EditableTableProps {
+  onDataChange?: (rows: TableRow[]) => void;
+}
+
+export default function EditableTable({ onDataChange }: EditableTableProps) {
   const { language } = useLanguage();
   const t = translations[language];
   const [showPrice, setShowPrice] = useState(true);
@@ -282,7 +286,11 @@ export default function EditableTable() {
   useEffect(() => {
     localStorage.setItem('tableHeaders', JSON.stringify(headers));
     localStorage.setItem('tableRows', JSON.stringify(rows));
-  }, [headers, rows]);
+    // Call onDataChange prop with current rows
+    if (onDataChange) {
+      onDataChange(rows);
+    }
+  }, [headers, rows, onDataChange]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -389,88 +397,45 @@ export default function EditableTable() {
   });
 
   return (
-    <div className="w-full max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8">
-      <div className="flex justify-between mb-6">
-        <div className="space-x-3 rtl:space-x-reverse">
-          <button
-            onClick={addRow}
-            className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-all duration-200 shadow-sm min-w-[140px] text-base font-medium"
-          >
-            {t.addService}
-          </button>
-          <button
-            onClick={addSubheaderRow}
-            className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-all duration-200 shadow-sm min-w-[140px] text-base font-medium"
-          >
-            {t.addSubheader}
-          </button>
-          <button
-            onClick={addColumn}
-            className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-all duration-200 shadow-sm min-w-[140px] text-base font-medium"
-          >
-            {t.addColumn}
-          </button>
-        </div>
-        <button
-          onClick={togglePriceVisibility}
-          className="bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm min-w-[140px] text-base font-medium"
-        >
-          {t.togglePrice}
-        </button>
-      </div>
-
-      <div className="relative overflow-x-auto max-w-full">
-        <table className="w-full border-collapse table-fixed">
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
           <thead>
-            <tr className="relative">
-              {sortedHeaders?.map((header, index) => {
-                if (!header.isVisible || (header.id === "price" && !showPrice)) {
-                  return null;
-                }
-
-                const isFirstColumn = index === 0;
-                const isLastColumn = header.id === 'price';
-                const columnWidth = header.id === 'service' ? 'w-[200px]' : 'w-[120px]';
-
-                return (
-                  <th
-                    key={header.id}
-                    className={`
-                      border p-3 bg-gray-50 text-center relative
-                      ${columnWidth}
-                      ${isFirstColumn ? 'sticky left-0 z-10' : ''}
-                      ${isLastColumn ? 'sticky right-0 z-10' : ''}
-                    `}
-                    style={{
-                      position: isFirstColumn || isLastColumn ? 'sticky' : 'static',
-                      left: isFirstColumn ? 0 : 'auto',
-                      right: isLastColumn ? 0 : 'auto',
-                      backgroundColor: isFirstColumn || isLastColumn ? '#f9fafb' : ''
-                    }}
-                  >
-                    <div className="flex items-center justify-center space-x-2">
-                      <input
-                        type="text"
-                        value={header.label}
-                        onChange={(e) => updateHeaderLabel(header.id, e.target.value)}
-                        className="bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none px-2 py-1 text-center w-full"
-                        placeholder={t[header.id as keyof typeof t]}
-                      />
-                      {header.id !== 'service' && header.id !== 'quantity' && header.id !== 'price' && (
-                        <button
-                          onClick={() => deleteColumn(header.id)}
-                          className="text-gray-400 hover:text-gray-600 focus:outline-none"
-                          title={t.deleteColumn}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                );
-              })}
+            <tr>
+              {sortedHeaders?.map((header) => (
+                <th
+                  key={header.id}
+                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                    !header.isVisible ? 'hidden' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <input
+                      type="text"
+                      value={header.label}
+                      onChange={(e) => updateHeaderLabel(header.id, e.target.value)}
+                      className="bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none px-2 py-1 text-center w-full"
+                      placeholder={t[header.id as keyof typeof t]}
+                    />
+                    {header.id !== 'service' && header.id !== 'quantity' && header.id !== 'price' && (
+                      <button
+                        onClick={() => deleteColumn(header.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <span>×</span>
+                      </button>
+                    )}
+                  </div>
+                </th>
+              ))}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <button
+                  onClick={addColumn}
+                  className="text-blue-500 hover:text-blue-700"
+                >
+                  +
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -501,18 +466,16 @@ export default function EditableTable() {
         </table>
       </div>
 
-      {/* Price Summary */}
+      {/* Price summary component */}
       {showPrice && (
         <PriceSummary
-          rows={rows.map(row => ({
+          rows={rows.filter((row) => !row.isSubheader).map((row) => ({
             price: parseFloat(row.price) || 0,
             quantity: parseFloat(row.quantity) || 0,
             isSubheader: row.isSubheader
           }))}
         />
       )}
-
-      <TermsAndConditions />
     </div>
   );
 }
