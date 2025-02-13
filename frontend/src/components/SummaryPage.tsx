@@ -135,13 +135,13 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
   return (
     <div className="container mx-auto p-6" dir={isHebrew ? 'rtl' : 'ltr'}>
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex justify-between items-start mb-6 " dir={!isHebrew ? 'rtl' : 'ltr'}>
           {logo && (
             <div className="w-48">
               <img src={logo} alt="Company Logo" className="h-24 object-contain" />
             </div>
           )}
-          <h1 className="text-3xl font-bold text-gray-900">{t.title}</h1>
+          <h1 className="text-3xl font-bold mt-3 mr-3 text-gray-900">{t.title}</h1>
         </div>
 
         <div className="mb-6">
@@ -177,6 +177,8 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
               />
             }
             label={t.includeTerms}
+            className="gap-2"
+
           />
           <FormControlLabel
             control={
@@ -186,6 +188,7 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
               />
             }
             label={t.includeRemarks}
+            className="gap-2"
           />
         </div>
 
