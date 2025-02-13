@@ -1,5 +1,5 @@
 import { useLanguage } from '../contexts/LanguageContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import EditableTable from './EditableTable';
 import { TermsAndConditions } from './TermsAndConditions';
 import { Remarks } from './Remarks';
@@ -98,12 +98,40 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
   const [logo, setLogo] = useState<string | null>(() => {
     return localStorage.getItem('companyLogo');
   });
-  const [includeTerms, setIncludeTerms] = useState(true);
-  const [includeRemarks, setIncludeRemarks] = useState(true);
+  const [includeTerms, setIncludeTerms] = useState(() => {
+    const saved = localStorage.getItem('includeTerms');
+    return saved ? JSON.parse(saved) : true;
+  });
+  const [includeRemarks, setIncludeRemarks] = useState(() => {
+    const saved = localStorage.getItem('includeRemarks');
+    return saved ? JSON.parse(saved) : true;
+  });
   const [showPreview, setShowPreview] = useState(false);
   const [tableData, setTableData] = useState<any[]>([]);
-  const [terms, setTerms] = useState<string>('');
-  const [remarks, setRemarks] = useState<string>('');
+  const [terms, setTerms] = useState<string>(() => {
+    const savedTerms = localStorage.getItem('terms');
+    return savedTerms || '';
+  });
+  const [remarks, setRemarks] = useState<string>(() => {
+    const savedRemarks = localStorage.getItem('remarks');
+    return savedRemarks || '';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('terms', terms);
+  }, [terms]);
+
+  useEffect(() => {
+    localStorage.setItem('remarks', remarks);
+  }, [remarks]);
+
+  useEffect(() => {
+    localStorage.setItem('includeTerms', JSON.stringify(includeTerms));
+  }, [includeTerms]);
+
+  useEffect(() => {
+    localStorage.setItem('includeRemarks', JSON.stringify(includeRemarks));
+  }, [includeRemarks]);
 
   const handleTableData = (data: any[]) => {
     setTableData(data);
@@ -135,7 +163,7 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
   return (
     <div className="container mx-auto p-6" dir={isHebrew ? 'rtl' : 'ltr'}>
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div className="flex justify-between items-start mb-6 " dir={!isHebrew ? 'rtl' : 'ltr'}>
+        <div className="flex justify-between items-start mb-6" dir={!isHebrew ? 'rtl' : 'ltr'}>
           {logo && (
             <div className="w-48">
               <img src={logo} alt="Company Logo" className="h-24 object-contain" />
@@ -178,7 +206,6 @@ export default function SummaryPage({ companyInfo }: SummaryPageProps) {
             }
             label={t.includeTerms}
             className="gap-2"
-
           />
           <FormControlLabel
             control={

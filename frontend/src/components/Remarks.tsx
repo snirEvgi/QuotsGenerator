@@ -6,6 +6,10 @@ interface ListItem {
   content: string;
 }
 
+interface Props {
+  onChange: (remarks: string) => void;
+}
+
 const translations = {
   en: {
     title: 'Remarks',
@@ -25,32 +29,37 @@ const translations = {
   }
 } as const;
 
-export const Remarks: React.FC = () => {
+export const Remarks: React.FC<Props> = ({ onChange }) => {
   const { language } = useLanguage();
   const t = translations[language];
   const isHebrew = language === 'he';
 
-  const [items, setItems] = useState<ListItem[]>([]);
+  const [items, setItems] = useState<ListItem[]>(() => {
+    const savedItems = localStorage.getItem('remarksItems');
+    return savedItems ? JSON.parse(savedItems) : [];
+  });
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Load items from localStorage
-  useEffect(() => {
-    const savedItems = localStorage.getItem('remarksItems');
-    if (savedItems) {
-      setItems(JSON.parse(savedItems));
-    }
-  }, []);
-
-  // Save items to localStorage
   useEffect(() => {
     localStorage.setItem('remarksItems', JSON.stringify(items));
-  }, [items]);
+    // Convert items to string format for parent component
+    const remarksString = items.map(item => item.content).join('\n');
+    onChange(remarksString);
+  }, [items, onChange]);
 
   const handleAddItem = () => {
     if (!newItem.trim()) return;
-    setItems([...items, { id: Date.now().toString(), content: newItem.trim() }]);
+    const newItemObj = {
+      id: Date.now().toString(),
+      content: newItem.trim()
+    };
+    setItems([...items, newItemObj]);
     setNewItem('');
+  };
+
+  const handleDeleteItem = (id: string) => {
+    setItems(items.filter(item => item.id !== id));
   };
 
   const handleUpdateItem = (id: string, content: string) => {
@@ -60,8 +69,10 @@ export const Remarks: React.FC = () => {
     setEditingId(null);
   };
 
-  const handleDeleteItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddItem();
+    }
   };
 
   return (
@@ -80,7 +91,7 @@ export const Remarks: React.FC = () => {
             type="text"
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleAddItem()}
+            onKeyPress={handleKeyPress}
             placeholder={t.placeholder}
             className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             dir={isHebrew ? 'rtl' : 'ltr'}
