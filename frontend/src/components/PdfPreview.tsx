@@ -176,27 +176,43 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           </div>
 
           {includeTerms && terms && (
-            <div className="pdf-terms">
-              <h3 className="text-lg font-semibold mb-2">{t.terms}</h3>
-              <div dangerouslySetInnerHTML={{ __html: terms }} />
+            <div className="pdf-terms mt-8 p-6 bg-gray-50 rounded-lg">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">{t.terms}</h3>
+              <div className="space-y-2">
+                {terms.split('\n').map((term, index) => (
+                  term.trim() && (
+                    <div key={index} className="flex items-start">
+                      <p className="text-gray-700 leading-relaxed">{term.trim()}</p>
+                    </div>
+                  )
+                ))}
+              </div>
             </div>
           )}
 
           {includeRemarks && remarks && (
-            <div className="pdf-remarks">
-              <h3 className="text-lg font-semibold mb-2">{t.remarks}</h3>
-              <div dangerouslySetInnerHTML={{ __html: remarks }} />
+            <div className="pdf-remarks mt-8 p-6 bg-blue-50 rounded-lg">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">{t.remarks}</h3>
+              <div className="space-y-2">
+                {remarks.split('\n').map((remark, index) => (
+                  remark.trim() && (
+                    <div key={index} className="flex items-start">
+                      <p className="text-gray-700 leading-relaxed">{remark.trim()}</p>
+                    </div>
+                  )
+                ))}
+              </div>
             </div>
           )}
 
-          <div className="pdf-footer">
-            <p>Generated on {new Date().toLocaleDateString()}</p>
+          <div className="pdf-footer mt-8 pt-4 border-t border-gray-200">
+            <p className="text-gray-600 text-sm">Generated on {new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
-      <div className="preview-actions">
-        <button className="preview-button back-button" onClick={onBack}>
+      <div className={isHebrew ? 'preview-actionshebrew' : 'preview-actions'}>
+        <button className="preview-button back-button"  onClick={onBack}>
           {t.back}
         </button>
         <button className="preview-button download-button" onClick={generatePdf}>
