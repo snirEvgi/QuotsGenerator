@@ -81,7 +81,7 @@ export default function QuotesPage() {
     if (validateForm()) {
       // Store the data in localStorage for use in the summary page
       localStorage.setItem('companyInfo', JSON.stringify(formData));
-      navigate('/logo-upload');
+      navigate('/logo-upload'); // Changed from '/summary' to '/logo-upload'
     }
   };
 

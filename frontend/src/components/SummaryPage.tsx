@@ -1,22 +1,11 @@
 import { useLanguage } from '../contexts/LanguageContext';
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import EditableTable from './EditableTable';
 import { TermsAndConditions } from './TermsAndConditions';
 import { Remarks } from './Remarks';
-import { FormControlLabel, Switch, styled } from '@mui/material';
-import { PdfPreview } from './PdfPreview';
-import '../styles/pdf.css';
-
-interface CompanyInfo {
-  companyName: string;
-  companyId: string;
-  companyPhone: string;
-  customerName: string;
-}
-
-interface SummaryPageProps {
-  companyInfo: CompanyInfo;
-}
+import { createSummary, updateSummary, getSummary, type Summary } from '../firebase/firestore';
 
 const translations = {
   he: {
@@ -24,210 +13,204 @@ const translations = {
     companyDetails: 'פרטי החברה',
     companyName: 'שם החברה',
     companyId: 'ח.פ',
-    companyPhone: 'טלפון',
+    companyPhone: 'טלפון החברה',
     customerName: 'שם הלקוח',
-    downloadPdf: 'הורד PDF',
-    includeTerms: 'כלול תנאים והגבלות',
-    includeRemarks: 'כלול הערות',
-    previewPdf: 'תצוגה מקדימה של PDF'
+    error: 'שגיאה בטעינת פרטי החברה',
+    backToForm: 'חזור לטופס',
+    loading: 'טוען...',
+    noAccess: 'אין לך גישה להצעת מחיר זו',
   },
   en: {
-    title: 'Price Quote Summary',
+    title: 'Quote Summary',
     companyDetails: 'Company Details',
     companyName: 'Company Name',
     companyId: 'Company ID',
-    companyPhone: 'Phone',
+    companyPhone: 'Company Phone',
     customerName: 'Customer Name',
-    downloadPdf: 'Download PDF',
-    includeTerms: 'Include Terms & Conditions',
-    includeRemarks: 'Include Remarks',
-    previewPdf: 'Preview PDF'
+    error: 'Error loading company details',
+    backToForm: 'Back to Form',
+    loading: 'Loading...',
+    noAccess: 'You do not have access to this quote',
   },
 };
 
-const IOSSwitch = styled((props) => (
-  <Switch focusVisibleClassName=".Mui-focusVisible" disableRipple {...props} />
-))(({ theme }) => ({
-  width: 42,
-  height: 26,
-  padding: 0,
-  '& .MuiSwitch-switchBase': {
-    padding: 0,
-    margin: 2,
-    transitionDuration: '300ms',
-    '&.Mui-checked': {
-      transform: 'translateX(16px)',
-      color: '#fff',
-      '& + .MuiSwitch-track': {
-        backgroundColor: '#4F46E5',
-        opacity: 1,
-        border: 0,
-      },
-      '&.Mui-disabled + .MuiSwitch-track': {
-        opacity: 0.5,
-      },
-    },
-    '&.Mui-focusVisible .MuiSwitch-thumb': {
-      color: '#4F46E5',
-      border: '6px solid #fff',
-    },
-    '&.Mui-disabled .MuiSwitch-thumb': {
-      color: '#E5E7EB',
-    },
-    '&.Mui-disabled + .MuiSwitch-track': {
-      opacity: 0.7,
-    },
-  },
-  '& .MuiSwitch-thumb': {
-    boxSizing: 'border-box',
-    width: 22,
-    height: 22,
-  },
-  '& .MuiSwitch-track': {
-    borderRadius: 26 / 2,
-    backgroundColor: '#E5E7EB',
-    opacity: 1,
-    transition: 'background-color 500ms',
-  },
-}));
-
-export default function SummaryPage({ companyInfo }: SummaryPageProps) {
+export default function SummaryPage() {
   const { language } = useLanguage();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { id } = useParams<{ id: string }>();
   const t = translations[language];
-  const isHebrew = language === 'he';
-  const [logo, setLogo] = useState<string | null>(() => {
-    return localStorage.getItem('companyLogo');
-  });
-  const [includeTerms, setIncludeTerms] = useState(() => {
-    const saved = localStorage.getItem('includeTerms');
-    return saved ? JSON.parse(saved) : true;
-  });
-  const [includeRemarks, setIncludeRemarks] = useState(() => {
-    const saved = localStorage.getItem('includeRemarks');
-    return saved ? JSON.parse(saved) : true;
-  });
-  const [showPreview, setShowPreview] = useState(false);
-  const [tableData, setTableData] = useState<any[]>([]);
-  const [terms, setTerms] = useState<string>(() => {
-    const savedTerms = localStorage.getItem('terms');
-    return savedTerms || '';
-  });
-  const [remarks, setRemarks] = useState<string>(() => {
-    const savedRemarks = localStorage.getItem('remarks');
-    return savedRemarks || '';
-  });
+  
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('terms', terms);
-  }, [terms]);
+    let mounted = true;
 
-  useEffect(() => {
-    localStorage.setItem('remarks', remarks);
-  }, [remarks]);
+    const loadSummary = async () => {
+      if (!user?.uid) {
+        setError('Please sign in to view quotes');
+        setLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    localStorage.setItem('includeTerms', JSON.stringify(includeTerms));
-  }, [includeTerms]);
+      if (!id) {
+        const storedInfo = localStorage.getItem('companyInfo');
+        const storedLogo = localStorage.getItem('companyLogo');
+        
+        if (!storedInfo) {
+          navigate('/quotes-list');
+          return;
+        }
 
-  useEffect(() => {
-    localStorage.setItem('includeRemarks', JSON.stringify(includeRemarks));
-  }, [includeRemarks]);
+        try {
+          const parsedInfo = JSON.parse(storedInfo);
+          if (!parsedInfo.companyName || !parsedInfo.companyId || 
+              !parsedInfo.companyPhone || !parsedInfo.customerName) {
+            setError('Invalid company information');
+            setLoading(false);
+            return;
+          }
 
-  const handleTableData = (data: any[]) => {
-    setTableData(data);
+          const newSummary = await createSummary(user.uid, {
+            companyInfo: parsedInfo,
+            logo: storedLogo,
+            terms: '',
+            remarks: '',
+            tableData: [],
+          });
+
+          if (!mounted) return;
+          
+          localStorage.removeItem('companyInfo');
+          localStorage.removeItem('companyLogo');
+          navigate(`/summary/${newSummary.id}`, { replace: true });
+        } catch (err) {
+          if (!mounted) return;
+          setError('Failed to create quote');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const existingSummary = await getSummary(id);
+        if (!mounted) return;
+
+        if (!existingSummary) {
+          setError('Quote not found');
+          setLoading(false);
+          return;
+        }
+
+        if (existingSummary.userId !== user.uid) {
+          setError(t.noAccess);
+          setLoading(false);
+          return;
+        }
+
+        setSummary(existingSummary);
+        setLoading(false);
+      } catch (err) {
+        if (!mounted) return;
+        setError('Failed to load quote');
+        setLoading(false);
+      }
+    };
+
+    loadSummary();
+    return () => {
+      mounted = false;
+    };
+  }, [id, user?.uid, navigate, t.noAccess]);
+
+  const handleSummaryChange = async (changes: Partial<Summary>) => {
+    if (!summary?.id || saving) return;
+
+    try {
+      setSaving(true);
+      const updatedSummary = { ...summary, ...changes };
+      setSummary(updatedSummary);
+      await updateSummary(summary.id, changes);
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      setSummary(summary); // Revert on error
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleTermsChange = (content: string) => {
-    setTerms(content);
-  };
-
-  const handleRemarksChange = (content: string) => {
-    setRemarks(content);
-  };
-
-  if (showPreview) {
+  if (loading) {
     return (
-      <PdfPreview
-        companyInfo={companyInfo}
-        logo={logo}
-        includeTerms={includeTerms}
-        includeRemarks={includeRemarks}
-        onBack={() => setShowPreview(false)}
-        tableData={tableData}
-        terms={terms}
-        remarks={remarks}
-      />
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg text-gray-600">{t.loading}</p>
+      </div>
     );
   }
 
-  return (
-    <div className="container mx-auto p-6" dir={isHebrew ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div className="flex justify-between items-start mb-6" dir={!isHebrew ? 'rtl' : 'ltr'}>
-          {logo && (
-            <div className="w-48">
-              <img src={logo} alt="Company Logo" className="h-24 object-contain" />
-            </div>
-          )}
-          <h1 className="text-3xl font-bold mt-3 mr-3 text-gray-900">{t.title}</h1>
-        </div>
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-lg text-red-600 mb-4">{error}</p>
+        <button
+          onClick={() => navigate('/quotes-list')}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          {t.backToForm}
+        </button>
+      </div>
+    );
+  }
 
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">{t.companyDetails}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">{t.companyName}</label>
-              <div className="mt-1">{companyInfo.companyName}</div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">{t.companyId}</label>
-              <div className="mt-1">{companyInfo.companyId}</div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">{t.companyPhone}</label>
-              <div className="mt-1">{companyInfo.companyPhone}</div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">{t.customerName}</label>
-              <div className="mt-1">{companyInfo.customerName}</div>
-            </div>
+  if (!summary) {
+    return null;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8 text-center">{t.title}</h1>
+      
+      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-4">{t.companyDetails}</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="font-medium">{t.companyName}</p>
+            <p>{summary.companyInfo.companyName}</p>
+          </div>
+          <div>
+            <p className="font-medium">{t.companyId}</p>
+            <p>{summary.companyInfo.companyId}</p>
+          </div>
+          <div>
+            <p className="font-medium">{t.companyPhone}</p>
+            <p>{summary.companyInfo.companyPhone}</p>
+          </div>
+          <div>
+            <p className="font-medium">{t.customerName}</p>
+            <p>{summary.companyInfo.customerName}</p>
           </div>
         </div>
+      </div>
 
-        <EditableTable onDataChange={handleTableData} />
+      <EditableTable
+        data={summary.tableData || []}
+        onDataChange={(tableData) => handleSummaryChange({ tableData })}
+      />
 
-        <div className="flex flex-col gap-4 mt-6">
-          <FormControlLabel
-            control={
-              <IOSSwitch
-                checked={includeTerms}
-                onChange={(e) => setIncludeTerms(e.target.checked)}
-              />
-            }
-            label={t.includeTerms}
-            className="gap-2"
-          />
-          <FormControlLabel
-            control={
-              <IOSSwitch
-                checked={includeRemarks}
-                onChange={(e) => setIncludeRemarks(e.target.checked)}
-              />
-            }
-            label={t.includeRemarks}
-            className="gap-2"
-          />
-        </div>
+      <div className="mt-8">
+        <TermsAndConditions
+          terms={summary.terms || ''}
+          onChange={(terms) => handleSummaryChange({ terms })}
+        />
+      </div>
 
-        {includeTerms && <TermsAndConditions onChange={handleTermsChange} />}
-        {includeRemarks && <Remarks onChange={handleRemarksChange} />}
-
-        <button
-          onClick={() => setShowPreview(true)}
-          className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          {t.previewPdf}
-        </button>
+      <div className="mt-8">
+        <Remarks
+          remarks={summary.remarks || ''}
+          onChange={(remarks) => handleSummaryChange({ remarks })}
+        />
       </div>
     </div>
   );
