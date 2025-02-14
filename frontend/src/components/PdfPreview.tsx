@@ -81,6 +81,11 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
   const isHebrew = language === 'he';
   const pdfRef = useRef<HTMLDivElement>(null);
 
+  // Get values from localStorage
+  const subtotal = parseFloat(localStorage.getItem('total') || '0');
+  const vatAmount = parseFloat(localStorage.getItem('vatAmount') || '0');
+  const total = subtotal + vatAmount;
+
   const calculateTotal = (row: TableRow) => {
     if (row.isSubheader) return '';
     return row.quantity * row.price;
@@ -162,14 +167,17 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
                     </td>
                   </tr>
                 ))}
-                <tr className="total-row">
-                  <td colSpan={3} className="text-right font-bold">{t.total}</td>
-                  <td className="text-center font-bold">
-                    ₪{tableData
-                      .filter(row => !row.isSubheader)
-                      .reduce((sum, row) => sum + (row.quantity * row.price), 0)
-                      .toLocaleString()}
-                  </td>
+                <tr className="border-t border-gray-300">
+                  <td colSpan={3} className="text-right font-bold p-2">{isHebrew ? 'סה"כ לפני מע"מ' : 'Subtotal'}</td>
+                  <td className="text-center font-bold p-2">₪{subtotal.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td colSpan={3} className="text-right p-2">{isHebrew ? 'מע"מ (17%)' : 'VAT (17%)'}</td>
+                  <td className="text-center p-2">₪{vatAmount.toLocaleString()}</td>
+                </tr>
+                <tr className="border-t-2 border-gray-400">
+                  <td colSpan={3} className="text-right font-bold text-lg p-2">{t.total}</td>
+                  <td className="text-center font-bold text-lg p-2">₪{total.toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>

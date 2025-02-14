@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface PriceSummaryProps {
@@ -44,10 +44,16 @@ export const PriceSummary: React.FC<PriceSummaryProps> = ({ rows }) => {
 
   const vatAmount = subtotal * VAT_RATE;
   const total = subtotal + vatAmount;
+  useEffect(() => {
+    localStorage.setItem('vatAmount', vatAmount.toString());
+  }, [vatAmount]);
+  useEffect(() => {
+    localStorage.setItem('total', subtotal.toString());
+  }, [subtotal]);
 
   return (
-    <div 
-      className="mt-6 border-t border-gray-200 pt-4 flex justify-center" 
+    <div
+      className="mt-6 border-t border-gray-200 pt-4 flex justify-center"
       dir={isHebrew ? 'rtl' : 'ltr'}
     >
       <div className="w-full max-w-md">
