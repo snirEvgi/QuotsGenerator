@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import EditableTable from './EditableTable';
 import { TermsAndConditions } from './TermsAndConditions';
 import { Remarks } from './Remarks';
+import { PdfPreview } from './PdfPreview';
 import { createSummary, updateSummary, getSummary, type Summary } from '../firebase/firestore';
 
 const translations = {
@@ -21,6 +22,9 @@ const translations = {
     noAccess: 'אין לך גישה להצעת מחיר זו',
     saving: 'שומר...',
     preview: 'תצוגה מקדימה',
+    subtotal: 'סכום ביניים',
+    vat: 'מע"מ',
+    total: 'סה"כ'
   },
   en: {
     title: 'Quote Summary',
@@ -35,6 +39,9 @@ const translations = {
     noAccess: 'You do not have access to this quote',
     saving: 'Saving...',
     preview: 'Preview',
+    subtotal: 'Subtotal',
+    vat: 'VAT',
+    total: 'Total'
   },
 };
 
@@ -44,12 +51,61 @@ export default function SummaryPage() {
   const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const t = translations[language];
+  const isHebrew = language === 'he';
   
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [localChanges, setLocalChanges] = useState<Partial<Summary>>({});
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
+  // Calculate totals
+  const calculateTotals = () => {
+    if (!summary?.tableData) return { subtotal: 0, vat: 0, total: 0 };
+    
+    const subtotal = summary.tableData.reduce((acc, row) => {
+      if (row.isSubheader) return acc;
+      return acc + (row.quantity * row.price);
+    }, 0);
+    
+    const vat = subtotal * 0.17; // 17% VAT
+    const total = subtotal + vat;
+    
+    return { subtotal, vat, total };
+  };
+
+  const handleLocalChange = (changes: Partial<Summary>) => {
+    setLocalChanges(prev => {
+      const newChanges = { ...prev, ...changes };
+  
+      // Prevent unnecessary updates if nothing changed
+      if (JSON.stringify(prev) === JSON.stringify(newChanges)) {
+        return prev;
+      }
+  
+      return newChanges;
+    });
+  };
+  const handlePreviewClick = async () => {
+    if (!summary?.id || saving) return;
+
+    try {
+      setSaving(true);
+      if (Object.keys(localChanges).length > 0) {
+        const updatedSummary = { ...summary, ...localChanges };
+        await updateSummary(summary.id, localChanges);
+        setSummary(updatedSummary);
+        setLocalChanges({});
+      }
+      setShowPdfPreview(true);
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      setSummary(summary);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -62,41 +118,7 @@ export default function SummaryPage() {
       }
 
       if (!id) {
-        const storedInfo = localStorage.getItem('companyInfo');
-        const storedLogo = localStorage.getItem('companyLogo');
-        
-        if (!storedInfo) {
-          navigate('/quotes-list');
-          return;
-        }
-
-        try {
-          const parsedInfo = JSON.parse(storedInfo);
-          if (!parsedInfo.companyName || !parsedInfo.companyId || 
-              !parsedInfo.companyPhone || !parsedInfo.customerName) {
-            setError('Invalid company information');
-            setLoading(false);
-            return;
-          }
-
-          const newSummary = await createSummary(user.uid, {
-            companyInfo: parsedInfo,
-            logo: storedLogo,
-            terms: '',
-            remarks: '',
-            tableData: [],
-          });
-
-          if (!mounted) return;
-          
-          localStorage.removeItem('companyInfo');
-          localStorage.removeItem('companyLogo');
-          navigate(`/summary/${newSummary.id}`, { replace: true });
-        } catch (err) {
-          if (!mounted) return;
-          setError('Failed to create quote');
-          setLoading(false);
-        }
+        navigate('/create-quote');
         return;
       }
 
@@ -131,28 +153,6 @@ export default function SummaryPage() {
     };
   }, [id, user?.uid, navigate, t.noAccess]);
 
-  const handleLocalChange = (changes: Partial<Summary>) => {
-    setLocalChanges(prev => ({ ...prev, ...changes }));
-  };
-
-  const handlePreviewClick = async () => {
-    if (!summary?.id || saving || Object.keys(localChanges).length === 0) return;
-
-    try {
-      setSaving(true);
-      const updatedSummary = { ...summary, ...localChanges };
-      await updateSummary(summary.id, localChanges);
-      setSummary(updatedSummary);
-      setLocalChanges({});
-    } catch (err) {
-      console.error('Error saving changes:', err);
-      // Revert on error
-      setSummary(summary);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -179,13 +179,39 @@ export default function SummaryPage() {
     return null;
   }
 
+  if (showPdfPreview && summary) {
+    return (
+      <PdfPreview
+        companyInfo={summary.companyInfo}
+        logo={summary.logo}
+        includeTerms={true}
+        includeRemarks={true}
+        onBack={() => setShowPdfPreview(false)}
+        tableData={summary.tableData || []}
+        terms={summary.terms}
+        remarks={summary.remarks}
+      />
+    );
+  }
+
+  const { subtotal, vat, total } = calculateTotals();
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8 text-center">{t.title}</h1>
-      
       <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">{t.companyDetails}</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`flex items-start justify-between mb-6 ${isHebrew ? 'flex-row-reverse' : 'flex-row'}`}>
+          <div className="w-32">
+            {summary.logo && (
+              <img src={summary.logo} alt="Company Logo" className="w-full object-contain" />
+            )}
+          </div>
+          <div className="flex-1 text-center">
+            <h1 className="text-3xl font-bold">{t.title}</h1>
+          </div>
+          <div className="w-32"></div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mt-6" dir={isHebrew ? 'rtl' : 'ltr'}>
           <div>
             <p className="font-medium">{t.companyName}</p>
             <p>{summary.companyInfo.companyName}</p>
@@ -209,6 +235,23 @@ export default function SummaryPage() {
         data={summary.tableData || []}
         onDataChange={(tableData) => handleLocalChange({ tableData })}
       />
+
+      <div className="bg-white shadow-lg rounded-lg p-6 mt-4" dir={isHebrew ? 'rtl' : 'ltr'}>
+        <div className="flex flex-col gap-2 items-end">
+          <div className="flex gap-4">
+            <span className="font-medium">{t.subtotal}:</span>
+            <span>₪{subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex gap-4">
+            <span className="font-medium">{t.vat} (17%):</span>
+            <span>₪{vat.toFixed(2)}</span>
+          </div>
+          <div className="flex gap-4 text-lg font-bold border-t pt-2">
+            <span>{t.total}:</span>
+            <span>₪{total.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
 
       <div className="mt-8">
         <TermsAndConditions

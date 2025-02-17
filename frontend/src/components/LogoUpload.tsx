@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { createSummary } from '../firebase/firestore';
 
 const translations = {
   he: {
@@ -13,6 +15,8 @@ const translations = {
     error: 'שגיאה בהעלאת הקובץ',
     invalidType: 'סוג קובץ לא חוקי. אנא העלה תמונה בפורמט PNG, JPG, או JPEG',
     maxSize: 'גודל הקובץ חייב להיות קטן מ-2MB',
+    authError: 'יש להתחבר כדי להמשיך',
+    dataError: 'חסרים פרטי חברה',
   },
   en: {
     title: 'Logo Upload',
@@ -24,17 +28,21 @@ const translations = {
     error: 'Error uploading file',
     invalidType: 'Invalid file type. Please upload a PNG, JPG, or JPEG image',
     maxSize: 'File size must be less than 2MB',
+    authError: 'Please sign in to continue',
+    dataError: 'Missing company information',
   },
 };
 
 export default function LogoUpload() {
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const t = translations[language];
 
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -70,7 +78,6 @@ export default function LogoUpload() {
       reader.onloadend = () => {
         const base64String = reader.result as string;
         setPreview(base64String);
-        localStorage.setItem('companyLogo', base64String);
       };
       reader.readAsDataURL(file);
     }
@@ -93,13 +100,74 @@ export default function LogoUpload() {
     }
   };
 
-  const handleSubmit = () => {
-    navigate('/summary');
+  const handleSubmit = async () => {
+    if (!user) {
+      setError(t.authError);
+      return;
+    }
+
+    const storedInfo = localStorage.getItem('companyInfo');
+    if (!storedInfo) {
+      setError(t.dataError);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      const parsedInfo = JSON.parse(storedInfo);
+      const newSummary = await createSummary(user.uid, {
+        companyInfo: parsedInfo,
+        logo: preview,
+        terms: '',
+        remarks: '',
+        tableData: [],
+      });
+
+      localStorage.removeItem('companyInfo');
+      navigate(`/summary/${newSummary.id}`);
+    } catch (err) {
+      console.error('Error creating summary:', err);
+      setError(t.error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSkip = () => {
-    localStorage.removeItem('companyLogo');
-    navigate('/summary');
+  const handleSkip = async () => {
+    if (!user) {
+      setError(t.authError);
+      return;
+    }
+
+    const storedInfo = localStorage.getItem('companyInfo');
+    if (!storedInfo) {
+      setError(t.dataError);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      const parsedInfo = JSON.parse(storedInfo);
+      const newSummary = await createSummary(user.uid, {
+        companyInfo: parsedInfo,
+        logo: null,
+        terms: '',
+        remarks: '',
+        tableData: [],
+      });
+
+      localStorage.removeItem('companyInfo');
+      navigate(`/summary/${newSummary.id}`);
+    } catch (err) {
+      console.error('Error creating summary:', err);
+      setError(t.error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -108,69 +176,57 @@ export default function LogoUpload() {
         {t.title}
       </h1>
 
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+          {error}
+        </div>
+      )}
+
       <div
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center mb-6
+        className={`border-2 border-dashed rounded-lg p-8 mb-6 text-center
           ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}
-          ${preview ? 'border-green-500' : ''}`}
+          ${preview ? 'bg-gray-50' : ''}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        <input
-          type="file"
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          onChange={handleChange}
-          accept="image/png,image/jpeg,image/jpg"
-        />
-
         {preview ? (
-          <div className="flex flex-col items-center">
-            <img
-              src={preview}
-              alt="Logo preview"
-              className="max-w-xs max-h-48 object-contain mb-4"
-            />
-            <p className="text-green-600">{t.uploadText}</p>
-          </div>
+          <img
+            src={preview}
+            alt="Logo preview"
+            className="max-h-48 mx-auto"
+          />
         ) : (
-          <div className="py-12">
-            <svg
-              className="mx-auto h-16 w-16 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          <>
+            <p className="text-gray-600 mb-2">{t.dragText}</p>
+            <label className="cursor-pointer text-blue-600 hover:text-blue-700">
+              {t.clickText}
+              <input
+                type="file"
+                className="hidden"
+                accept="image/png,image/jpeg,image/jpg"
+                onChange={handleChange}
               />
-            </svg>
-            <p className="mt-4 text-gray-600">
-              {t.dragText} <span className="text-blue-500">{t.clickText}</span>
-            </p>
-          </div>
+            </label>
+          </>
         )}
       </div>
 
-      {error && (
-        <p className="text-red-500 text-sm text-center mb-4">{error}</p>
-      )}
-
-      <div className="flex justify-center space-x-4 rtl:space-x-reverse">
-        <button
-          onClick={handleSubmit}
-          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          {t.continue}
-        </button>
+      <div className="flex justify-between">
         <button
           onClick={handleSkip}
-          className="bg-gray-100 text-gray-700 px-6 py-2 rounded-md hover:bg-gray-200 transition-colors"
+          className="px-6 py-2 text-gray-600 hover:text-gray-800"
+          disabled={isSubmitting}
         >
           {t.skip}
+        </button>
+        <button
+          onClick={handleSubmit}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          disabled={isSubmitting}
+        >
+          {t.continue}
         </button>
       </div>
     </div>

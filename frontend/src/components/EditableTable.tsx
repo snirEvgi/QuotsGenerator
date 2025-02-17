@@ -273,13 +273,17 @@ export default function EditableTable({ onDataChange, data }: EditableTableProps
     { id: 'price', label: t.price, isVisible: true },
   ]);
   
-  const [rows, setRows] = useState<TableRow[]>(data || [
-    { id: '1', service: '', quantity: 0, price: 0 },
-    { id: '2', service: '', quantity: 0, price: 0 },
-    { id: '3', service: '', quantity: 0, price: 0 },
-    { id: '4', service: '', quantity: 0, price: 0 },
-    { id: '5', service: '', quantity: 0, price: 0 },
-  ]);
+  const [rows, setRows] = useState<TableRow[]>(() => {
+    if (data && data.length > 0) return data;
+    
+    // Initialize with 4 predefined empty rows
+    return [
+      { id: '1', service: '', quantity: 0, price: 0 },
+      { id: '2', service: '', quantity: 0, price: 0 },
+      { id: '3', service: '', quantity: 0, price: 0 },
+      { id: '4', service: '', quantity: 0, price: 0 }
+    ];
+  });
 
   useEffect(() => {
     if (onDataChange) {
