@@ -19,6 +19,8 @@ const translations = {
     backToForm: 'חזור לטופס',
     loading: 'טוען...',
     noAccess: 'אין לך גישה להצעת מחיר זו',
+    saving: 'שומר...',
+    preview: 'תצוגה מקדימה',
   },
   en: {
     title: 'Quote Summary',
@@ -31,6 +33,8 @@ const translations = {
     backToForm: 'Back to Form',
     loading: 'Loading...',
     noAccess: 'You do not have access to this quote',
+    saving: 'Saving...',
+    preview: 'Preview',
   },
 };
 
@@ -45,6 +49,7 @@ export default function SummaryPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [localChanges, setLocalChanges] = useState<Partial<Summary>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -126,17 +131,23 @@ export default function SummaryPage() {
     };
   }, [id, user?.uid, navigate, t.noAccess]);
 
-  const handleSummaryChange = async (changes: Partial<Summary>) => {
-    if (!summary?.id || saving) return;
+  const handleLocalChange = (changes: Partial<Summary>) => {
+    setLocalChanges(prev => ({ ...prev, ...changes }));
+  };
+
+  const handlePreviewClick = async () => {
+    if (!summary?.id || saving || Object.keys(localChanges).length === 0) return;
 
     try {
       setSaving(true);
-      const updatedSummary = { ...summary, ...changes };
+      const updatedSummary = { ...summary, ...localChanges };
+      await updateSummary(summary.id, localChanges);
       setSummary(updatedSummary);
-      await updateSummary(summary.id, changes);
+      setLocalChanges({});
     } catch (err) {
       console.error('Error saving changes:', err);
-      setSummary(summary); // Revert on error
+      // Revert on error
+      setSummary(summary);
     } finally {
       setSaving(false);
     }
@@ -196,21 +207,35 @@ export default function SummaryPage() {
 
       <EditableTable
         data={summary.tableData || []}
-        onDataChange={(tableData) => handleSummaryChange({ tableData })}
+        onDataChange={(tableData) => handleLocalChange({ tableData })}
       />
 
       <div className="mt-8">
         <TermsAndConditions
           terms={summary.terms || ''}
-          onChange={(terms) => handleSummaryChange({ terms })}
+          onChange={(terms) => handleLocalChange({ terms })}
         />
       </div>
 
       <div className="mt-8">
         <Remarks
           remarks={summary.remarks || ''}
-          onChange={(remarks) => handleSummaryChange({ remarks })}
+          onChange={(remarks) => handleLocalChange({ remarks })}
         />
+      </div>
+
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={handlePreviewClick}
+          disabled={saving || Object.keys(localChanges).length === 0}
+          className={`px-6 py-2 rounded-lg text-white font-semibold ${
+            saving || Object.keys(localChanges).length === 0
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {saving ? t.saving : t.preview}
+        </button>
       </div>
     </div>
   );
